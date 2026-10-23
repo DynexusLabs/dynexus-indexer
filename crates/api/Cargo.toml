@@ -14,9 +14,13 @@ chrono = { workspace = true }
 diesel = { workspace = true }
 diesel-async = { workspace = true }
 dynexus-db = { workspace = true }
+futures-util = "0.3"
+native-tls = "0.2"
+postgres-native-tls = "0.5"
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
+tokio-postgres = "0.7"
 tower-http = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

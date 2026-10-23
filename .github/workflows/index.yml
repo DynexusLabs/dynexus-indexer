@@ -1,0 +1,78 @@
+name: Index
+
+# Testnet demo: no always-on processor. Every 6 hours (or on demand) catch up from the
+# saved checkpoint, then stop. Safe to cut off mid-batch: each batch commits in one
+# transaction and replays are no-ops (see README "Correctness").
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: Minutes to run before stopping
+        default: "4"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: index
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  DYNEXUS_ADDRESS: "0x6e9d623d8aa35cf0453f96e2590d782bd19181e3f63758da443003b6049c44f6"
+  # Version of the first DYNEXUS publish on testnet; the checkpoint takes over after that.
+  STARTING_VERSION: "123019329"
+
+jobs:
+  index:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y libdw-dev libpq-dev pkg-config
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: processor-release
+      - run: cargo build --release --locked -p dynexus-processor
+
+      - name: Write processor config
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          TRANSACTION_STREAM_API_KEY: ${{ secrets.TRANSACTION_STREAM_API_KEY }}
+        run: |
+          test -n "$DATABASE_URL" || { echo "::error::DATABASE_URL secret is not set"; exit 1; }
+          test -n "$TRANSACTION_STREAM_API_KEY" || { echo "::error::TRANSACTION_STREAM_API_KEY secret is not set"; exit 1; }
+          # The SDK pool only enables TLS when sslrootcert is present in the URL.
+          case "$DATABASE_URL" in *\?*) sep='&' ;; *) sep='?' ;; esac
+          db_url="${DATABASE_URL}${sep}sslrootcert=/etc/ssl/certs/ca-certificates.crt"
+          # JSON is valid YAML, and jq handles quoting of the secret values.
+          jq -n \
+            --arg db "$db_url" \
+            --arg key "$TRANSACTION_STREAM_API_KEY" \
+            --arg addr "$DYNEXUS_ADDRESS" \
+            --argjson start "$STARTING_VERSION" \
+            '{
+              health_check_port: 8085,
+              server_config: {
+                transaction_stream_config: {
+                  indexer_grpc_data_service_address: "https://grpc.testnet.aptoslabs.com:443",
+                  auth_token: $key,
+                  request_name_header: "dynexus-processor",
+                  starting_version: $start,
+                  transaction_filter: { type: "EventFilter", struct_type: { address: $addr } }
+                },
+                postgres_config: { connection_string: $db }
+              }
+            }' > "$RUNNER_TEMP/processor.yaml"
+
+      - name: Run processor
+        env:
+          DYNEXUS_ADDRESSES: ${{ env.DYNEXUS_ADDRESS }}
+          MINUTES: ${{ inputs.minutes || '4' }}
+        run: |
+          # timeout exits 124 when it stops the processor on schedule; that is success.
+          timeout --signal=INT "${MINUTES}m" ./target/release/dynexus-processor \
+            --config-path "$RUNNER_TEMP/processor.yaml" || [ $? -eq 124 ]
