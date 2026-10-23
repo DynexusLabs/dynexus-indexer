@@ -85,6 +85,33 @@ cp config/processor.example.yaml config/processor.yaml
 docker compose up --build
 ```
 
+## Hosted testnet setup (free tier)
+
+Testnet only needs fresh data now and then, so nothing runs around the clock:
+
+| Piece     | Where                                          | How it runs                                                       |
+| --------- | ---------------------------------------------- | ----------------------------------------------------------------- |
+| Postgres  | [Neon](https://neon.tech)                      | Scales to zero when idle                                          |
+| Processor | GitHub Actions (`.github/workflows/index.yml`) | Every 6 hours, or **Run workflow**: catches up, stops after 4 min |
+| API       | [Render](https://render.com) free web service  | Sleeps when idle; first request after that takes 30–60 s          |
+
+Stopping the processor mid-batch is safe: the checkpoint resumes the next run, and replayed
+batches are no-ops (see [Correctness](#correctness)). The web app gives the indexer 5 s and
+then falls back to view calls, so a sleeping API never breaks a page.
+
+1. **Neon**: create a project, then copy the connection string with connection pooling
+   **off** (the pooled endpoint breaks prepared statements). Keep `sslmode=require`.
+2. **Repo secrets** (Settings → Secrets and variables → Actions): `DATABASE_URL` (Neon
+   string) and `TRANSACTION_STREAM_API_KEY` ([geomi.dev](https://geomi.dev)).
+3. **First run**: Actions → Index → Run workflow. It creates the schema and indexes from
+   the first DYNEXUS publish. Raise `minutes` if one run does not catch up.
+4. **Render**: New → Web Service → this repo, runtime Docker, **Dockerfile path
+   `./Dockerfile.api`**, instance Free, health check path `/health`. Environment:
+   `DATABASE_URL` (Neon string) and `CORS_ORIGIN=https://dynexus-web.vercel.app`. The API
+   listens on Render's `PORT`.
+5. **Web**: set `NEXT_PUBLIC_INDEXER_URL` to the Render URL in Vercel and redeploy (the
+   URL is baked into the CSP at build time).
+
 ## Development
 
 ```bash
