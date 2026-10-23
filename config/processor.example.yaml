@@ -1,0 +1,18 @@
+# Copy to config/processor.yaml (git-ignored) and fill in auth_token.
+# Get a Transaction Stream API key at https://geomi.dev (Aptos Build).
+health_check_port: 8085
+server_config:
+  transaction_stream_config:
+    indexer_grpc_data_service_address: "https://grpc.testnet.aptoslabs.com:443"
+    auth_token: "YOUR_TRANSACTION_STREAM_API_KEY"
+    request_name_header: "dynexus-processor"
+    # Version of the first DYNEXUS publish transaction; earlier history is skipped.
+    starting_version: 0
+    # Server-side filter: only transactions emitting events from the DYNEXUS address
+    # are streamed, so the processor never downloads unrelated chain traffic.
+    transaction_filter:
+      type: EventFilter
+      struct_type:
+        address: "0x6e9d623d8aa35cf0453f96e2590d782bd19181e3f63758da443003b6049c44f6"
+  postgres_config:
+    connection_string: "postgresql://dynexus:dynexus@localhost:5432/dynexus"

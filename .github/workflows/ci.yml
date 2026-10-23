@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  GITLEAKS_VERSION: 8.30.1
+  CARGO_TERM_COLOR: always
+
+jobs:
+  secrets:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        run: |
+          curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | tar -xz gitleaks
+          ./gitleaks git --redact --verbose .
+
+  rust:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: dynexus
+          POSTGRES_PASSWORD: dynexus
+          POSTGRES_DB: dynexus
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U dynexus" --health-interval 2s --health-retries 30
+    env:
+      DATABASE_URL: postgresql://dynexus:dynexus@localhost:5432/dynexus
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: sudo apt-get update && sudo apt-get install -y libdw-dev libpq-dev pkg-config
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - name: Lint commit messages
+        if: github.event_name == 'pull_request'
+        run: bunx commitlint --from "${{ github.event.pull_request.base.sha }}" --to "${{ github.event.pull_request.head.sha }}" --verbose
+      - run: cargo fmt --all --check
+      - run: bunx prettier --check "**/*.{md,yml,yaml,json}"
+      - run: cargo xclippy
+      - run: cargo test --workspace --locked

@@ -1,0 +1,6 @@
+# The Aptos indexer SDK's metrics rely on tokio_unstable.
+[build]
+rustflags = ["--cfg", "tokio_unstable"]
+
+[alias]
+xclippy = ["clippy", "--workspace", "--all-targets", "--", "-Dwarnings"]
