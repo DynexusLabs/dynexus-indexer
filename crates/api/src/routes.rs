@@ -99,8 +99,27 @@ fn address(raw: &str) -> ApiResult<String> {
 
 #[derive(Deserialize)]
 pub struct Page {
+    #[serde(default, deserialize_with = "opt_i64")]
     limit: Option<i64>,
+    #[serde(default, deserialize_with = "opt_i64")]
     offset: Option<i64>,
+}
+
+/// Query-string integer. Needed because `#[serde(flatten)]` buffers every query value as a
+/// string, so a plain `Option<i64>` fails with "invalid type: string, expected i64".
+fn opt_i64<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<i64>, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Raw {
+        Int(i64),
+        Str(String),
+    }
+    match Option::<Raw>::deserialize(d)? {
+        None => Ok(None),
+        Some(Raw::Int(n)) => Ok(Some(n)),
+        Some(Raw::Str(s)) if s.is_empty() => Ok(None),
+        Some(Raw::Str(s)) => s.parse().map(Some).map_err(serde::de::Error::custom),
+    }
 }
 
 impl Page {
@@ -120,13 +139,36 @@ fn dec_str(d: Option<BigDecimal>) -> String {
 // Handlers
 //
 
+// Checkpoint table owned by the Aptos indexer SDK (created by its migrations).
+diesel::table! {
+    processor_metadata.processor_status (processor) {
+        processor -> Varchar,
+        last_success_version -> Int8,
+    }
+}
+
+const PROCESSOR_NAME: &str = "dynexus_processor";
+
 async fn health(State(pool): State<DbPool>) -> ApiResult<Response> {
     let mut c = conn(&pool).await?;
     let latest: Option<i64> = dynexus_events::table
         .select(diesel::dsl::max(dynexus_events::transaction_version))
         .first(&mut c)
         .await?;
-    Ok(Json(json!({ "ok": true, "latest_version": latest })).into_response())
+    // `processed_version` advances with the chain even when no DYNEXUS events occur;
+    // `latest_version` is the last transaction that emitted one.
+    let processed: Option<i64> = processor_status::table
+        .filter(processor_status::processor.eq(PROCESSOR_NAME))
+        .select(processor_status::last_success_version)
+        .first(&mut c)
+        .await
+        .optional()?;
+    Ok(Json(json!({
+        "ok": true,
+        "latest_version": latest,
+        "processed_version": processed,
+    }))
+    .into_response())
 }
 
 async fn stats(State(pool): State<DbPool>) -> ApiResult<Response> {
@@ -560,6 +602,24 @@ mod tests {
             offset: None,
         };
         assert_eq!((p.limit(), p.offset()), (50, 0));
+    }
+
+    #[test]
+    fn page_parses_from_query_string_when_flattened() {
+        let uri: axum::http::Uri = "/tokens?q=dyn&limit=100&offset=5".parse().unwrap();
+        let Query(t) = Query::<TokenQuery>::try_from_uri(&uri).unwrap();
+        assert_eq!((t.page.limit(), t.page.offset()), (100, 5));
+
+        let uri: axum::http::Uri = "/pools?limit=7".parse().unwrap();
+        let Query(p) = Query::<PoolQuery>::try_from_uri(&uri).unwrap();
+        assert_eq!((p.page.limit(), p.page.offset()), (7, 0));
+
+        let uri: axum::http::Uri = "/swaps?limit=3".parse().unwrap();
+        let Query(p) = Query::<Page>::try_from_uri(&uri).unwrap();
+        assert_eq!(p.limit(), 3);
+
+        let uri: axum::http::Uri = "/pools?limit=abc".parse().unwrap();
+        assert!(Query::<PoolQuery>::try_from_uri(&uri).is_err());
     }
 
     #[test]

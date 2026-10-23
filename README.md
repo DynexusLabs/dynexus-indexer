@@ -47,7 +47,7 @@ On-chain integers are stored as `NUMERIC` and served as decimal strings (u64/u25
 
 | Endpoint                                        | Description                                                 |
 | ----------------------------------------------- | ----------------------------------------------------------- |
-| `GET /health`                                   | Liveness + latest indexed version                           |
+| `GET /health`                                   | Liveness, processor checkpoint, last DYNEXUS event version  |
 | `GET /stats`                                    | Token/pool counts, 24h swaps & traders, total veDYNA locked |
 | `GET /tokens?creator=&q=&limit=&offset=`        | Factory tokens, newest first; `q` searches name/symbol      |
 | `GET /tokens/{address}`                         | Token + pools containing it                                 |
