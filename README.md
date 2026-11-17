@@ -85,32 +85,74 @@ cp config/processor.example.yaml config/processor.yaml
 docker compose up --build
 ```
 
-## Hosted testnet setup (free tier)
+## Hosted testnet setup (Oracle Cloud Always Free)
 
-Testnet only needs fresh data now and then, so nothing runs around the clock:
+One always-on VM runs the whole stack from [`deploy/oracle`](deploy/oracle): the processor
+streams continuously and stays within seconds of the chain head, the API sits behind Caddy
+(automatic HTTPS), and Postgres is reachable only inside the compose network.
 
-| Piece     | Where                                          | How it runs                                                       |
-| --------- | ---------------------------------------------- | ----------------------------------------------------------------- |
-| Postgres  | [Neon](https://neon.tech)                      | Scales to zero when idle                                          |
-| Processor | GitHub Actions (`.github/workflows/index.yml`) | Every 6 hours, or **Run workflow**: catches up, stops after 4 min |
-| API       | [Render](https://render.com) free web service  | Sleeps when idle; first request after that takes 30–60 s          |
+Why not a scheduled job: the Transaction Stream walks every version even with the server-side
+filter (~13k versions/s). Testnet grows ~16M versions/day, so the processor needs ~20 min of
+streaming a day just to keep pace. The earlier GitHub Actions schedule gave it 16 min and fell
+further behind every day. The `Index` workflow remains as a manual fallback only.
 
-Stopping the processor mid-batch is safe: the checkpoint resumes the next run, and replayed
-batches are no-ops (see [Correctness](#correctness)). The web app gives the indexer 5 s and
-then falls back to view calls, so a sleeping API never breaks a page.
+1. **VM**: in OCI create an instance with shape `VM.Standard.A1.Flex` (Ampere, Always Free
+   eligible; 2 OCPU / 12 GB is plenty) and image Ubuntu 24.04. Note the public IP.
+2. **Open ports 80 and 443**: in the subnet's security list add ingress rules for TCP 80 and
+   443 from `0.0.0.0/0`. Oracle's Ubuntu image also rejects them in iptables:
 
-1. **Neon**: create a project, then copy the connection string with connection pooling
-   **off** (the pooled endpoint breaks prepared statements). Keep `sslmode=require`.
-2. **Repo secrets** (Settings → Secrets and variables → Actions): `DATABASE_URL` (Neon
-   string) and `TRANSACTION_STREAM_API_KEY` ([geomi.dev](https://geomi.dev)).
-3. **First run**: Actions → Index → Run workflow. It creates the schema and indexes from
-   the first DYNEXUS publish. Raise `minutes` if one run does not catch up.
-4. **Render**: New → Web Service → this repo, runtime Docker, **Dockerfile path
-   `./Dockerfile.api`**, instance Free, health check path `/health`. Environment:
-   `DATABASE_URL` (Neon string) and `CORS_ORIGIN=https://dynexus-web.vercel.app`. The API
-   listens on Render's `PORT`.
-5. **Web**: set `NEXT_PUBLIC_INDEXER_URL` to the Render URL in Vercel and redeploy (the
-   URL is baked into the CSP at build time).
+   ```bash
+   sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT
+   sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT
+   sudo netfilter-persistent save
+   ```
+
+3. **Docker**:
+
+   ```bash
+   curl -fsSL https://get.docker.com | sudo sh
+   sudo usermod -aG docker "$USER"   # log out and back in
+   ```
+
+4. **Configure**:
+
+   ```bash
+   git clone https://github.com/DynexusLabs/dynexus-indexer.git && cd dynexus-indexer/deploy/oracle
+   cp .env.example .env && chmod 600 .env
+   # DOMAIN: your domain (A record -> VM IP) or <ip-with-dashes>.sslip.io
+   # POSTGRES_PASSWORD: openssl rand -hex 24
+   # TRANSACTION_STREAM_API_KEY: from geomi.dev
+   ```
+
+5. **Start**: `docker compose up -d --build`. The first build compiles the processor on the
+   VM (~15–25 min on 2 OCPU). On an empty database the processor starts at
+   `STARTING_VERSION` and catches up to the chain head (several hours for testnet's backlog),
+   then follows it live. Progress: `curl https://$DOMAIN/health` (`processed_version`).
+
+   To skip most of the catch-up, copy the existing Neon data before the first start:
+
+   ```bash
+   docker compose up -d postgres
+   # runs pg_dump inside the postgres container (needs Neon on Postgres 16 or older)
+   docker compose exec -T postgres sh -c \
+     'pg_dump --no-owner --no-acl "$0" | psql -v ON_ERROR_STOP=1 -U dynexus dynexus' "$NEON_DATABASE_URL"
+   docker compose up -d --build
+   ```
+
+6. **Web**: set `NEXT_PUBLIC_INDEXER_URL=https://$DOMAIN` in Vercel and redeploy (the URL is
+   baked into the CSP at build time). The Render service and Neon database can then be
+   removed.
+
+Operations, from `deploy/oracle`:
+
+```bash
+docker compose logs -f processor     # live stream progress
+git pull && docker compose up -d --build   # deploy a new version
+docker compose exec postgres pg_dump -U dynexus dynexus | gzip > backup.sql.gz
+```
+
+Containers restart on crash and on reboot (`restart: unless-stopped`); the processor resumes
+from its checkpoint. Logs are capped at 100 MB per service.
 
 ## Development
 

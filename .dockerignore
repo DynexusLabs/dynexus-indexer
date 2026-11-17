@@ -3,3 +3,7 @@ target
 .env
 config/processor.yaml
 node_modules
+**/.env
+**/.env.*
+!**/.env.example
+deploy
