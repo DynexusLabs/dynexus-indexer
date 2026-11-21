@@ -1,5 +1,7 @@
 # Dynexus Indexer
 
+[![CI](https://github.com/DynexusLabs/dynexus-indexer/actions/workflows/ci.yml/badge.svg)](https://github.com/DynexusLabs/dynexus-indexer/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![Network: Aptos testnet](https://img.shields.io/badge/network-Aptos%20testnet-00d9ff.svg)](https://aptos.dev)
+
 Rust indexer and read API for the Dynexus protocol (Forge, Swap, Core) on Aptos.
 
 The web app used to call one view function per token/pool on every page load, and had no
