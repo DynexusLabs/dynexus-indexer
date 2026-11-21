@@ -1,0 +1,17 @@
+{
+  "name": "dynexus-index-trigger",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4",
+    "@types/bun": "^1.4.5",
+    "typescript": "^5",
+    "wrangler": "^4"
+  }
+}
