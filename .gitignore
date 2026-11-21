@@ -11,3 +11,7 @@ node_modules/
 .aptos/
 *.pem
 *.key
+
+# Cloudflare Worker local state and secrets
+.wrangler/
+.dev.vars

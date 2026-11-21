@@ -97,6 +97,8 @@ minutes a day, and private repos get 2,000 a month. Secrets (`DATABASE_URL`,
 `TRANSACTION_STREAM_API_KEY`) stay in GitHub Actions secrets. After redeploying the contracts
 set `DYNEXUS_ADDRESS` and `STARTING_VERSION` in `index.yml`. To clear a backlog, run `Index`
 manually with `minutes` up to 340.
+GitHub's cron is best-effort; [`deploy/cloudflare`](deploy/cloudflare) is a free Cloudflare
+Worker that triggers `Index` every 5 minutes reliably.
 
 ## Hosted testnet setup (Oracle Cloud Always Free)
 

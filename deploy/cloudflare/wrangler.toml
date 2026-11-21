@@ -1,0 +1,13 @@
+name = "dynexus-index-trigger"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+workers_dev = false
+
+[triggers]
+crons = ["*/5 * * * *"]
+
+[vars]
+REPO = "DynexusLabs/dynexus-indexer"
+WORKFLOW = "index.yml"
+MINUTES = "2"
+# GITHUB_TOKEN is a secret: `wrangler secret put GITHUB_TOKEN` (never put it in this file).
