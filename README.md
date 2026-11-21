@@ -90,8 +90,12 @@ docker compose up --build
 ## Hosted testnet setup without a server (GitHub Actions + Neon + Render)
 
 The `Index` workflow runs every 5 minutes for 2 minutes from the stored checkpoint, so each
-run only has a few minutes of chain to catch up and data is at most ~10 minutes behind the
-head. It reuses a cached binary instead of rebuilding. The `Reset user data` workflow
+run only has a few minutes of chain to catch up. When GitHub honours the cron, data is at most
+~10 minutes behind the head. GitHub treats `schedule` as best-effort, though: on a quiet repo it
+has delayed or dropped runs for hours, so the real lag can be much larger. Anything that needs
+live numbers (reserves, balances, your own transactions) must come from the chain, as the web app
+does; the indexer is for history and aggregates. To keep it fresh, trigger `Index` externally
+(for example a cron service calling `workflow_dispatch`). It reuses a cached binary instead of rebuilding. The `Reset user data` workflow
 applies the biweekly reset to Neon. This needs a **public** repository: it uses ~860 runner
 minutes a day, and private repos get 2,000 a month. Secrets (`DATABASE_URL`,
 `TRANSACTION_STREAM_API_KEY`) stay in GitHub Actions secrets. After redeploying the contracts
@@ -107,7 +111,8 @@ streams continuously and stays within seconds of the chain head, the API sits be
 Why not a scheduled job: the Transaction Stream walks every version even with the server-side
 filter (~13k versions/s). Testnet grows ~16M versions/day, so the processor needs ~20 min of
 streaming a day just to keep pace. The earlier GitHub Actions schedule gave it 16 min and fell
-further behind every day. The `Index` workflow remains as a manual fallback only.
+further behind every day. If you run this VM, disable the `Index` workflow (it is the no-server
+alternative described above) so two processors do not write the same database.
 
 1. **VM**: in OCI create an instance with shape `VM.Standard.A1.Flex` (Ampere, Always Free
    eligible; 2 OCPU / 12 GB is plenty) and image Ubuntu 24.04. Note the public IP.
