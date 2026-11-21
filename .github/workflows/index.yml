@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 350
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Reuse the compiled binary so a 5-minute run does not rebuild; only the runtime
       # libraries are installed. The key changes whenever the Rust sources change.
       - uses: actions/cache@v4
