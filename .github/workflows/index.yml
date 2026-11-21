@@ -40,7 +40,7 @@ jobs:
       - uses: actions/cache@v4
         id: bin
         with:
-          path: target/release/dynexus-processor
+          path: bin/dynexus-processor
           key: processor-bin-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'crates/**') }}
       - run: sudo apt-get update && sudo apt-get install -y libdw1 libpq5
       - if: steps.bin.outputs.cache-hit != 'true'
@@ -52,7 +52,10 @@ jobs:
         with:
           shared-key: processor-release
       - if: steps.bin.outputs.cache-hit != 'true'
-        run: cargo build --release --locked -p dynexus-processor
+        # Copy out of target/: the rust-cache post step prunes it before this cache can save.
+        run: |
+          cargo build --release --locked -p dynexus-processor
+          mkdir -p bin && cp target/release/dynexus-processor bin/
 
       - name: Write processor config
         env:
@@ -90,5 +93,5 @@ jobs:
           MINUTES: ${{ inputs.minutes || '2' }}
         run: |
           # timeout exits 124 when it stops the processor on schedule; that is success.
-          timeout --signal=INT "${MINUTES}m" ./target/release/dynexus-processor \
+          timeout --signal=INT "${MINUTES}m" ./bin/dynexus-processor \
             --config-path "$RUNNER_TEMP/processor.yaml" || [ $? -eq 124 ]
