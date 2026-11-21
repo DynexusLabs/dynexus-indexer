@@ -1,0 +1,68 @@
+# Always-on stack for one VM (Oracle Cloud Always Free, Ampere A1 / arm64).
+# Processor streams continuously, API sits behind Caddy (automatic HTTPS), Postgres is
+# private to the compose network. Run from this directory: `docker compose up -d --build`.
+
+# The processor logs every batch; cap disk use so a 24/7 box never fills up.
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "20m", max-file: "5" }
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: dynexus
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: dynexus
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dynexus"]
+      interval: 5s
+      retries: 30
+    restart: unless-stopped
+    logging: *logging
+
+  processor:
+    build: { context: ../.., dockerfile: Dockerfile }
+    entrypoint: ["sh", "/deploy/processor-entrypoint.sh"]
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      TRANSACTION_STREAM_API_KEY: ${TRANSACTION_STREAM_API_KEY:?set TRANSACTION_STREAM_API_KEY in .env}
+      DYNEXUS_ADDRESSES: ${DYNEXUS_ADDRESSES:?set DYNEXUS_ADDRESSES in .env}
+      STARTING_VERSION: ${STARTING_VERSION:-123019329}
+      RUST_LOG: ${RUST_LOG:-info}
+    volumes: ["./processor-entrypoint.sh:/deploy/processor-entrypoint.sh:ro"]
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: unless-stopped
+    logging: *logging
+
+  api:
+    build: { context: ../.., dockerfile: Dockerfile.api }
+    environment:
+      DATABASE_URL: postgresql://dynexus:${POSTGRES_PASSWORD}@postgres:5432/dynexus
+      API_ADDR: 0.0.0.0:8080
+      CORS_ORIGIN: ${CORS_ORIGIN:-}
+      RUST_LOG: ${RUST_LOG:-info}
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: unless-stopped
+    logging: *logging
+
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [api]
+    restart: unless-stopped
+    logging: *logging
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

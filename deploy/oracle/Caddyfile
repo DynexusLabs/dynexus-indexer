@@ -1,0 +1,6 @@
+# Caddy obtains and renews a Let's Encrypt certificate for $DOMAIN automatically.
+# Ports 80 and 443 must be open in the OCI security list (see README).
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy api:8080
+}

@@ -1,11 +1,10 @@
 name: Index
 
-# Testnet demo: no always-on processor. Every 6 hours (or on demand) catch up from the
-# saved checkpoint, then stop. Safe to cut off mid-batch: each batch commits in one
-# transaction and replays are no-ops (see README "Correctness").
+# Manual fallback only. The live processor runs 24/7 on the Oracle VM (deploy/oracle).
+# The old 6-hourly schedule streamed ~7M versions/day while testnet grows ~16M/day, so it
+# fell further behind every day. Run this only to catch up the Neon database by hand.
+# Safe to cut off mid-batch: each batch commits in one transaction and replays are no-ops.
 on:
-  schedule:
-    - cron: "17 */6 * * *"
   workflow_dispatch:
     inputs:
       minutes:
