@@ -1,15 +1,20 @@
 name: Index
 
-# Manual fallback only. The live processor runs 24/7 on the Oracle VM (deploy/oracle).
-# The old 6-hourly schedule streamed ~7M versions/day while testnet grows ~16M/day, so it
-# fell further behind every day. Run this only to catch up the Neon database by hand.
+# Near-live indexing without a server. The Transaction Stream walks every version, so the
+# cost of a run is dominated by how far behind the checkpoint is (~13k versions/s). Running
+# every 5 minutes keeps the gap to a few minutes, so each run catches up in seconds and the
+# API is never more than ~10 minutes behind the chain head (GitHub may delay cron runs).
+# Needs a PUBLIC repo: ~860 runner-minutes/day is far above the private-repo free quota.
+# Manual run with a large `minutes` (up to 340) clears a backlog in one go.
 # Safe to cut off mid-batch: each batch commits in one transaction and replays are no-ops.
 on:
+  schedule:
+    - cron: "*/5 * * * *"
   workflow_dispatch:
     inputs:
       minutes:
         description: Minutes to run before stopping
-        default: "4"
+        default: "2"
 
 permissions:
   contents: read
@@ -27,15 +32,27 @@ env:
 jobs:
   index:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 350
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y libdw-dev libpq-dev pkg-config
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      # Reuse the compiled binary so a 5-minute run does not rebuild; only the runtime
+      # libraries are installed. The key changes whenever the Rust sources change.
+      - uses: actions/cache@v4
+        id: bin
+        with:
+          path: target/release/dynexus-processor
+          key: processor-bin-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'crates/**') }}
+      - run: sudo apt-get update && sudo apt-get install -y libdw1 libpq5
+      - if: steps.bin.outputs.cache-hit != 'true'
+        run: sudo apt-get install -y libdw-dev libpq-dev pkg-config
+      - if: steps.bin.outputs.cache-hit != 'true'
+        uses: dtolnay/rust-toolchain@stable
+      - if: steps.bin.outputs.cache-hit != 'true'
+        uses: Swatinem/rust-cache@v2
         with:
           shared-key: processor-release
-      - run: cargo build --release --locked -p dynexus-processor
+      - if: steps.bin.outputs.cache-hit != 'true'
+        run: cargo build --release --locked -p dynexus-processor
 
       - name: Write processor config
         env:
@@ -70,7 +87,7 @@ jobs:
       - name: Run processor
         env:
           DYNEXUS_ADDRESSES: ${{ env.DYNEXUS_ADDRESS }}
-          MINUTES: ${{ inputs.minutes || '4' }}
+          MINUTES: ${{ inputs.minutes || '2' }}
         run: |
           # timeout exits 124 when it stops the processor on schedule; that is success.
           timeout --signal=INT "${MINUTES}m" ./target/release/dynexus-processor \

@@ -1,0 +1,3 @@
+# Remove user activity history on the 1st and 15th at 03:00 UTC (~every two weeks).
+# Tokens, pools, gauges and epochs stay. Install: crontab -e, paste with the real path.
+0 3 1,15 * * /home/ubuntu/dynexus-indexer/deploy/oracle/reset-data.sh >> /home/ubuntu/reset-data.log 2>&1
