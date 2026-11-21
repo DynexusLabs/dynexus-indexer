@@ -25,9 +25,9 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  DYNEXUS_ADDRESS: "0x6e9d623d8aa35cf0453f96e2590d782bd19181e3f63758da443003b6049c44f6"
-  # Version of the first DYNEXUS publish on testnet; the checkpoint takes over after that.
-  STARTING_VERSION: "123019329"
+  DYNEXUS_ADDRESS: "0x719ef75da8261aa8f9546d3c97e7d239e08b45a9bff80bbce2db65b05051a026"
+  # Version of the first DYNEXUS publish on testnet (2026-11-21 deployment); the checkpoint takes over after that.
+  STARTING_VERSION: "601682816"
 
 jobs:
   index:

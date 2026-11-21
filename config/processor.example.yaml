@@ -13,6 +13,6 @@ server_config:
     transaction_filter:
       type: EventFilter
       struct_type:
-        address: "0x6e9d623d8aa35cf0453f96e2590d782bd19181e3f63758da443003b6049c44f6"
+        address: "0x719ef75da8261aa8f9546d3c97e7d239e08b45a9bff80bbce2db65b05051a026"
   postgres_config:
     connection_string: "postgresql://dynexus:dynexus@localhost:5432/dynexus"
