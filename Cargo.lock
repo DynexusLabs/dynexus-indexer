@@ -132,7 +132,7 @@ dependencies = [
  "clap",
  "derive_builder",
  "diesel",
- "diesel-async",
+ "diesel-async 0.7.4",
  "diesel_migrations",
  "field_count",
  "futures",
@@ -952,6 +952,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "diesel-async"
+version = "0.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd39af30158d444884f166fe4c58f35dc40ad71ad017bb59408a3448526ff4bd"
+dependencies = [
+ "bb8",
+ "diesel",
+ "futures-core",
+ "futures-util",
+ "pin-project-lite",
+ "tokio",
+ "tokio-postgres",
+]
+
+[[package]]
 name = "diesel_derives"
 version = "2.3.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1078,7 +1093,7 @@ dependencies = [
  "bigdecimal",
  "chrono",
  "diesel",
- "diesel-async",
+ "diesel-async 0.9.2",
  "dynexus-db",
  "futures-util",
  "native-tls",
@@ -1113,7 +1128,7 @@ dependencies = [
  "bigdecimal",
  "chrono",
  "diesel",
- "diesel-async",
+ "diesel-async 0.9.2",
  "diesel_migrations",
  "dynexus-db",
  "serde",
