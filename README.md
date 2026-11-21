@@ -87,6 +87,17 @@ cp config/processor.example.yaml config/processor.yaml
 docker compose up --build
 ```
 
+## Hosted testnet setup without a server (GitHub Actions + Neon + Render)
+
+The `Index` workflow runs every 5 minutes for 2 minutes from the stored checkpoint, so each
+run only has a few minutes of chain to catch up and data is at most ~10 minutes behind the
+head. It reuses a cached binary instead of rebuilding. The `Reset user data` workflow
+applies the biweekly reset to Neon. This needs a **public** repository: it uses ~860 runner
+minutes a day, and private repos get 2,000 a month. Secrets (`DATABASE_URL`,
+`TRANSACTION_STREAM_API_KEY`) stay in GitHub Actions secrets. After redeploying the contracts
+set `DYNEXUS_ADDRESS` and `STARTING_VERSION` in `index.yml`. To clear a backlog, run `Index`
+manually with `minutes` up to 340.
+
 ## Hosted testnet setup (Oracle Cloud Always Free)
 
 One always-on VM runs the whole stack from [`deploy/oracle`](deploy/oracle): the processor
@@ -152,6 +163,13 @@ docker compose logs -f processor     # live stream progress
 git pull && docker compose up -d --build   # deploy a new version
 docker compose exec postgres pg_dump -U dynexus dynexus | gzip > backup.sql.gz
 ```
+
+Biweekly reset: `deploy/oracle/reset-data.sh` removes user activity history (swaps, liquidity
+events, raw event log, votes and bribes of finished epochs) and keeps tokens, pools, gauges,
+epochs and live positions (`ve_locks`, `gauge_stakes`, current-epoch votes). The processor
+keeps running and keeps its checkpoint, so there is no replay and no downtime. Candles and
+volume history restart from empty. Schedule with [`cron.example`](deploy/oracle/cron.example)
+(1st and 15th, 03:00 UTC); `RETENTION_DAYS=14` run daily gives a rolling window instead.
 
 Containers restart on crash and on reboot (`restart: unless-stopped`); the processor resumes
 from its checkpoint. Logs are capped at 100 MB per service.
