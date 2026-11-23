@@ -1,0 +1,35 @@
+name: Reset all data
+
+# Manual only. Drops every indexed table and the processor checkpoint in the Neon database,
+# for use after redeploying the contracts to a new address. The next Index run recreates
+# the schema and starts at STARTING_VERSION. Unlike `Reset user data`, nothing is kept.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type WIPE to confirm
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: index
+  cancel-in-progress: false
+
+jobs:
+  wipe:
+    if: ${{ inputs.confirm == 'WIPE' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Drop schemas
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          test -n "$DATABASE_URL" || { echo "::error::DATABASE_URL secret is not set"; exit 1; }
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          DROP SCHEMA IF EXISTS processor_metadata CASCADE;
+          DROP SCHEMA public CASCADE;
+          CREATE SCHEMA public;
+          SQL
